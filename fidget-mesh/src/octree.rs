@@ -819,8 +819,10 @@ impl<'a, F: Function + RenderHints> OctreeBuilder<'a, F> {
                 // If a point has invalid gradients, then it's _probably_ on a
                 // sharp feature in the mesh, so we should just snap to that
                 // point specifically.  This means we don't solve the QEF, and
-                // instead mark it as invalid.
-                if grad.iter().any(|f| f.is_nan()) {
+                // instead mark it as invalid.  A zero or infinite gradient is
+                // just as invalid: `add_intersection` would normalize it into
+                // NANs, poisoning the whole QEF.
+                if grad.w.is_nan() || !grad.xyz().norm_squared().is_normal() {
                     force_point = Some(pos);
                     hermite_cell.qef_err = QEF_ERR_INVALID;
                     break;
@@ -1211,6 +1213,32 @@ mod test {
             }
         }
         assert_eq!(edge_count, 6);
+    }
+
+    #[test]
+    fn test_zero_gradient_at_surface() {
+        // Inside, the field is flat at -1e-9: closer to zero than the edge
+        // search resolves, so the gradient sampled beside the surface is
+        // exactly zero. Ties in `min` / `max` against a constant (e.g.
+        // `x.min(0.0)` evaluated exactly on a surface) produce such gradients
+        // in practice; normalizing one used to give a NaN vertex.
+        let (x, ..) = Tree::axes();
+        let shape = tree_to_shape(x.max(-1e-9).max(sphere([0.0; 3], 0.8)));
+        for threads in [None, Some(&ThreadPool::Global)] {
+            let settings = Settings {
+                depth: 5,
+                threads,
+                ..Default::default()
+            };
+            let mesh = Octree::build(&shape, &settings).unwrap().walk_dual();
+            assert!(!mesh.vertices.is_empty());
+            for v in &mesh.vertices {
+                assert!(
+                    v.iter().all(|c| c.is_finite()),
+                    "non-finite vertex {v:?}"
+                );
+            }
+        }
     }
 
     #[test]

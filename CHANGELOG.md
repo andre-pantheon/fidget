@@ -6,6 +6,9 @@
   allows us to integrate with other WGPU rendering pipelines which only provide
   a `CommandEncoder`; see the main `fidget_wgpu` module docs for details.
 - Add `vars()` to the `Bytecode` object, which stores the shape's `Arc<VarMap>`
+- Fix NAN vertices in meshes when the gradient at a surface crossing is zero
+  or infinite (e.g. from a `min` / `max` tie against a constant); such points
+  now snap like ones with NAN gradients.
 
 # 0.5.1
 The most significant change in this version is unlocking all-GPU rendering: we
