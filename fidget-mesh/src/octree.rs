@@ -808,11 +808,15 @@ impl<'a, F: Function + RenderHints> OctreeBuilder<'a, F> {
         };
 
         let mut verts: arrayvec::ArrayVec<_, 4> = arrayvec::ArrayVec::new();
-        let mut i = 0;
+        let mut next = 0;
         for vs in CELL_TO_VERT_TO_EDGES[mask.index()].iter() {
             let mut force_point = None;
             let mut qef = QuadraticErrorSolver::new();
-            for e in vs.iter() {
+            // Samples are packed per vertex; skip this vertex's even if we
+            // stop early, so the next vertex reads its own.
+            let first = next;
+            next += vs.len();
+            for (i, e) in (first..).zip(vs.iter()) {
                 let pos = nalgebra::Vector3::new(xs[i].v, ys[i].v, zs[i].v);
                 let grad: nalgebra::Vector4<f32> = grads[i].into();
 
@@ -835,8 +839,6 @@ impl<'a, F: Function + RenderHints> OctreeBuilder<'a, F> {
                     pos: nalgebra::Vector4::new(pos.x, pos.y, pos.z, 1.0),
                     grad,
                 };
-
-                i += 1;
             }
 
             if let Some(pos) = force_point {
